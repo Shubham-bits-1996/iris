@@ -1,0 +1,16 @@
+
+ # Python virtual environment
+ irisvenv/
+ 
+ # MLflow tracking data
+ mlruns/
+ 
+ # Python cache files
+ __pycache__/
+ *.pyc
+ *.pyo
+ *.pyd
+ 
+ # IDE and editor files
+ .idea/
+ .vscode/
