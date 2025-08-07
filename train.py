@@ -1,144 +1,84 @@
+import os
 import mlflow
+import joblib
 import mlflow.sklearn
-import pandas as pd
 from sklearn.datasets import load_iris
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import ParameterGrid, train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, log_loss
 
 
-def train_model():
-    # Set an experiment name to group the runs
-    mlflow.set_experiment("Iris Classification Experiment")
 
-    # Load data and split into training and testing sets for evaluation
-    iris_bunch = load_iris()
-    X = pd.DataFrame(iris_bunch.data, columns=iris_bunch.feature_names)
-    y = pd.Series(iris_bunch.target, name='species')
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+def load_data(test_size=0.2, random_state=42):
+    iris = load_iris(as_frame=True)
+    X, y = iris.data, iris.target
+    return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
-    # Start a parent run to encapsulate the entire training process
-    with mlflow.start_run(run_name="Model Comparison Run") as parent_run:
-        mlflow.log_param("data_split_random_state", 42)
-        mlflow.log_param("test_size", 0.2)
-        print(f"Parent Run ID: {parent_run.info.run_id}")
+def train_and_log(model, params, X_train, X_test, y_train, y_test, run_name):
+    with mlflow.start_run(run_name=run_name) as run:
+        mlflow.log_params(params)
+        model.set_params(**params)
+        model.fit(X_train, y_train)
 
-        # --- Grid Search for Logistic Regression ---
-        best_lr_accuracy = -1
-        best_lr_model_info = None
-        print("\n--- Starting Logistic Regression Trials ---")
-        with mlflow.start_run(run_name="LogisticRegression_Trials", nested=True):
-            lr_param_grid = {
-                "max_iter": [1000],  # Increased for 'saga' solver
-                "solver": ["saga"],
-                "penalty": ["l1", "l2"],
-                "C": [0.5, 1.0, 1.5],
-                "random_state": [42],
-            }
+        preds = model.predict(X_test)
+        proba = model.predict_proba(X_test)
+        acc = accuracy_score(y_test, preds)
+        ll  = log_loss(y_test, proba)
 
-            for i, params in enumerate(ParameterGrid(lr_param_grid)):
-                with mlflow.start_run(run_name=f"LR_run_{i}", nested=True) as lr_run:
-                    mlflow.log_params(params)
+        mlflow.log_metric("accuracy", acc)
+        mlflow.log_metric("log_loss", ll)
+        mlflow.sklearn.log_model(model, artifact_path="model")
 
-                    lr_model = LogisticRegression(**params)
-                    lr_model.fit(X_train, y_train)
+        # Capture run_id before exiting the context
+        run_id = run.info.run_id
 
-                    y_pred_lr = lr_model.predict(X_test)
-                    lr_accuracy = accuracy_score(y_test, y_pred_lr)
-                    mlflow.log_metric("accuracy", lr_accuracy)
-                    print(f"LR Trial {i} Accuracy: {lr_accuracy:.2f} with params {params}")
+    return acc, ll, run_id
 
-                    lr_model_info = mlflow.sklearn.log_model(
-                        sk_model=lr_model,
-                        name="logistic_regression_model"
-                    )
+def main():
+    # Use local 'mlruns' directory
+    mlflow.set_tracking_uri("file://" + os.path.abspath("mlruns"))
+    mlflow.set_experiment("Iris_Classification")
 
-                    if lr_accuracy > best_lr_accuracy:
-                        best_lr_accuracy = lr_accuracy
-                        best_lr_model_info = lr_model_info.model_uri  # Only store the URI (string)
+    X_train, X_test, y_train, y_test = load_data()
 
-            mlflow.log_metric("best_accuracy", best_lr_accuracy)
-            print(f"Best Logistic Regression Accuracy: {best_lr_accuracy:.2f}")
+    experiments = {
+        "LogisticRegression": {
+            "model": LogisticRegression,
+            "params": {"C": 1.0, "solver": "liblinear", "max_iter": 100}
+        },
+        "RandomForest": {
+            "model": RandomForestClassifier,
+            "params": {"n_estimators": 100, "max_depth": 4, "random_state": 42}
+        }
+    }
 
-        # --- Grid Search for Random Forest ---
-        best_rf_accuracy = -1
-        best_rf_model_info = None
-        print("\n--- Starting Random Forest Trials ---")
-        with mlflow.start_run(run_name="RandomForest_Trials", nested=True):
-            rf_param_grid = {
-                "n_estimators": [100, 150],
-                "max_depth": [5, 10],
-                "min_samples_leaf": [2, 4],
-                "criterion": ["gini", "entropy"],
-                "random_state": [42],
-            }
+    best_acc = -1
+    best_run_id = None
+    best_model_name = None
 
-            for i, params in enumerate(ParameterGrid(rf_param_grid)):
-                with mlflow.start_run(run_name=f"RF_run_{i}", nested=True):
-                    mlflow.log_params(params)
-
-                    rf_model = RandomForestClassifier(**params)
-                    rf_model.fit(X_train, y_train)
-
-                    y_pred_rf = rf_model.predict(X_test)
-                    rf_accuracy = accuracy_score(y_test, y_pred_rf)
-                    mlflow.log_metric("accuracy", rf_accuracy)
-                    print(f"RF Trial {i} Accuracy: {rf_accuracy:.2f} with params {params}")
-
-                    rf_model_info = mlflow.sklearn.log_model(
-                        sk_model=rf_model,
-                        name="random_forest_model"
-                    )
-
-                    if rf_accuracy > best_rf_accuracy:
-                        best_rf_accuracy = rf_accuracy
-                        best_rf_model_info = rf_model_info.model_uri  # Only store the URI (string)
-
-            mlflow.log_metric("best_accuracy", best_rf_accuracy)
-            print(f"Best Random Forest Accuracy: {best_rf_accuracy:.2f}")
-
-        
-
-        # --- Select and Register the Best Model from all trials ---
-        print("\n--- Selecting and Registering Best Model ---")
-        if best_lr_accuracy > best_rf_accuracy:
-            best_model_uri = best_lr_model_info  # Already a string
-            best_model_name = "Logistic Regression"
-            best_model_accuracy = best_lr_accuracy
-        else:
-            best_model_uri = best_rf_model_info  # Already a string
-            best_model_name = "Random Forest"
-            best_model_accuracy = best_rf_accuracy
-
-        print(f"Overall Best Model: '{best_model_name}' with accuracy: {best_model_accuracy:.2f}")
-        mlflow.set_tag("best_model", best_model_name)
-        mlflow.log_metric("best_model_accuracy", best_model_accuracy)
-
-        # Register the best model
-        registered_model_name = "IrisClassifier"
-        print(f"Registering the best model as '{registered_model_name}'")
-        registered_model = mlflow.register_model(
-            model_uri=best_model_uri,
-            name=registered_model_name
+    for name, spec in experiments.items():
+        acc, ll, run_id = train_and_log(
+            spec["model"](),
+            spec["params"],
+            X_train, X_test, y_train, y_test,
+            run_name=name
         )
-        print(f"Model registered: {registered_model.name}, version: {registered_model.version}")
+        print(f"{name} → accuracy={acc:.4f}, log_loss={ll:.4f}")
+        if acc > best_acc:
+            best_acc, best_run_id, best_model_name = acc, run_id, name
 
-        print(type(registered_model_name), type(registered_model.version), type(best_model_name), type(parent_run.info.run_id))
-        print(type(f"The best model ({best_model_name}) from run {parent_run.info.run_id} after grid search."))
+    # Register best model in the model registry
+    model_uri = f"runs:/{best_run_id}/model"
+    mlflow.register_model(model_uri, name="Best_Iris_Model")
+    print(f"Registered best model ({best_model_name}) with accuracy={best_acc:.4f}")
 
-        # Add a description to the registered model version for clarity
-        client = mlflow.tracking.MlflowClient()
-        client.update_model_version(
-            name=registered_model_name,
-            version=registered_model.version,
-            # description=str(f"The best model ({best_model_name}) from run {parent_run.info.run_id} after grid search.")
-            description="Best model"
-        )
-        
-        
+
+    best_model = mlflow.sklearn.load_model(model_uri)
+    os.makedirs("model", exist_ok=True)
+    joblib.dump(best_model, "model/best_iris_model.pkl")
+    print("Exported model to model/best_iris_model.pkl")
+
 
 if __name__ == "__main__":
-    train_model()
+    main()
