@@ -9,11 +9,11 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, log_loss
 
 
-
 def load_data(test_size=0.2, random_state=42):
     iris = load_iris(as_frame=True)
     X, y = iris.data, iris.target
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
+
 
 def train_and_log(model, params, X_train, X_test, y_train, y_test, run_name):
     with mlflow.start_run(run_name=run_name) as run:
@@ -24,7 +24,7 @@ def train_and_log(model, params, X_train, X_test, y_train, y_test, run_name):
         preds = model.predict(X_test)
         proba = model.predict_proba(X_test)
         acc = accuracy_score(y_test, preds)
-        ll  = log_loss(y_test, proba)
+        ll = log_loss(y_test, proba)
 
         mlflow.log_metric("accuracy", acc)
         mlflow.log_metric("log_loss", ll)
@@ -34,6 +34,7 @@ def train_and_log(model, params, X_train, X_test, y_train, y_test, run_name):
         run_id = run.info.run_id
 
     return acc, ll, run_id
+
 
 def main():
     # Use local 'mlruns' directory
@@ -45,12 +46,12 @@ def main():
     experiments = {
         "LogisticRegression": {
             "model": LogisticRegression,
-            "params": {"C": 1.0, "solver": "liblinear", "max_iter": 100}
+            "params": {"C": 1.0, "solver": "liblinear", "max_iter": 100},
         },
         "RandomForest": {
             "model": RandomForestClassifier,
-            "params": {"n_estimators": 100, "max_depth": 4, "random_state": 42}
-        }
+            "params": {"n_estimators": 100, "max_depth": 4, "random_state": 42},
+        },
     }
 
     best_acc = -1
@@ -61,8 +62,11 @@ def main():
         acc, ll, run_id = train_and_log(
             spec["model"](),
             spec["params"],
-            X_train, X_test, y_train, y_test,
-            run_name=name
+            X_train,
+            X_test,
+            y_train,
+            y_test,
+            run_name=name,
         )
         print(f"{name} → accuracy={acc:.4f}, log_loss={ll:.4f}")
         if acc > best_acc:
@@ -73,7 +77,7 @@ def main():
     mlflow.register_model(model_uri, name="Best_Iris_Model")
     print(f"Registered best model ({best_model_name}) with accuracy={best_acc:.4f}")
 
-
+    # Export best model to a pickle for serving
     best_model = mlflow.sklearn.load_model(model_uri)
     os.makedirs("model", exist_ok=True)
     joblib.dump(best_model, "model/best_iris_model.pkl")

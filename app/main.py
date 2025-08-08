@@ -2,8 +2,9 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
-
+import os
 import numpy as np
+
 
 class IrisRequest(BaseModel):
     sepal_length: float
@@ -11,17 +12,21 @@ class IrisRequest(BaseModel):
     petal_length: float
     petal_width: float
 
+
 class IrisResponse(BaseModel):
     predicted_class: int
     class_name: str
     probabilities: dict
 
+
 app = FastAPI(title="Iris Classification API")
 
 # Load the trained model
 # Ensure the model is saved at 'model/best_iris_model.pkl'
-model = joblib.load("model/best_iris_model.pkl")
+MODEL_PATH = os.getenv("MODEL_PATH", "model/best_iris_model.pkl")
+model = joblib.load(MODEL_PATH)
 target_names = ["setosa", "versicolor", "virginica"]
+
 
 @app.post("/predict", response_model=IrisResponse)
 def predict(request: IrisRequest):
