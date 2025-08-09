@@ -1,0 +1,7 @@
+.git
+irisvenv
+mlruns
+__pycache__
+*.pyc
+*.pyo
+*.pyd
