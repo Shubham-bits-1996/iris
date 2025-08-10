@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "iris-api"
+    metrics_path: /metrics
+    static_configs:
+      # Docker Desktop on macOS: use host.docker.internal to reach the host
+      # If you're running the API locally (uvicorn) or via your iris-api container
+      # mapped to host port 8000, this will work.
+      - targets: ["host.docker.internal:8000"]

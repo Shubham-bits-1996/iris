@@ -14,3 +14,8 @@ __pycache__/
 # IDE and editor files
 .idea/
 .vscode/
+
+# runtime logs
+logs/
+*.log
+*.db
