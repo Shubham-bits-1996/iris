@@ -1,0 +1,43 @@
+name: Retrain & Rebuild
+
+on:
+  push:
+    paths:
+      - "data/**"            # retrain when anything under data/ changes
+  workflow_dispatch:         # allow manual trigger from Actions tab
+
+jobs:
+  retrain-build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: "pip"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run training (produces model/best_iris_model.pkl)
+        run: python train.py
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image (with retrain tag)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/iris-api:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/iris-api:retrained-${{ github.sha }}
