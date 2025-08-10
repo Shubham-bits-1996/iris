@@ -29,6 +29,7 @@ if not logger.handlers:
 
 LOG_DB_PATH = os.getenv("LOG_DB_PATH", os.path.join(LOG_DIR, "logs.db"))
 
+
 def init_db():
     with sqlite3.connect(LOG_DB_PATH) as conn:
         conn.execute(
@@ -50,6 +51,7 @@ def init_db():
             """
         )
 
+
 init_db()
 logger.info("SQLite logging to %s", LOG_DB_PATH)
 
@@ -63,16 +65,19 @@ REQUEST_LATENCY = Histogram(
 )
 # --- end metrics ---
 
+
 class IrisRequest(BaseModel):
     sepal_length: float
     sepal_width: float
     petal_length: float
     petal_width: float
 
+
 class IrisResponse(BaseModel):
     predicted_class: int
     class_name: str
     probabilities: dict
+
 
 app = FastAPI(title="Iris Classification API")
 
@@ -81,6 +86,7 @@ MODEL_PATH = os.getenv("MODEL_PATH", "model/best_iris_model.pkl")
 model = joblib.load(MODEL_PATH)
 logger.info("Model loaded from %s", MODEL_PATH)
 target_names = ["setosa", "versicolor", "virginica"]
+
 
 @app.post("/predict", response_model=IrisResponse)
 def predict(request: IrisRequest):
@@ -102,9 +108,14 @@ def predict(request: IrisRequest):
         REQUEST_LATENCY.observe(latency_sec)
 
         logger.info(
-            "predict ok sepal_length=%.3f sepal_width=%.3f petal_length=%.3f petal_width=%.3f class=%s latency_ms=%.2f",
-            request.sepal_length, request.sepal_width, request.petal_length, request.petal_width,
-            target_names[idx], latency_ms,
+            "predict ok sepal_length=%.3f sepal_width=%.3f "
+            "petal_length=%.3f petal_width=%.3f class=%s latency_ms=%.2f",
+            request.sepal_length,
+            request.sepal_width,
+            request.petal_length,
+            request.petal_width,
+            target_names[idx],
+            latency_ms,
         )
         logger.info("predict probs=%s", proba_dict)
 
