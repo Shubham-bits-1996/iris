@@ -1,6 +1,6 @@
 # app/main.py
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import joblib
 import os
 import numpy as np
@@ -67,10 +67,18 @@ REQUEST_LATENCY = Histogram(
 
 
 class IrisRequest(BaseModel):
-    sepal_length: float
-    sepal_width: float
-    petal_length: float
-    petal_width: float
+    sepal_length: float = Field(
+        ..., gt=0, lt=10, description="Sepal length in cm; 0 < value < 10"
+    )
+    sepal_width: float = Field(
+        ..., gt=0, lt=10, description="Sepal width in cm; 0 < value < 10"
+    )
+    petal_length: float = Field(
+        ..., gt=0, lt=10, description="Petal length in cm; 0 < value < 10"
+    )
+    petal_width: float = Field(
+        ..., gt=0, lt=10, description="Petal width in cm; 0 < value < 10"
+    )
 
 
 class IrisResponse(BaseModel):
